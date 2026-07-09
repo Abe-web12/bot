@@ -1,0 +1,144 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "title": "ForexBot Overview",
+  "uid": "forexbot-overview",
+  "version": 1,
+  "timezone": "utc",
+  "editable": false,
+  "panels": [
+    {
+      "title": "Bot Status",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+      "targets": [{"expr": "forexbot_bot_status", "legendFormat": "Status"}],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"steps": [{"color": "red", "value": 0}, {"color": "green", "value": 4}]}
+        }
+      }
+    },
+    {
+      "title": "MT5 Connection",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+      "targets": [{"expr": "forexbot_connection_status", "legendFormat": "Connected"}],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"steps": [{"color": "red", "value": 0}, {"color": "green", "value": 1}]}
+        }
+      }
+    },
+    {
+      "title": "Balance",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+      "targets": [{"expr": "forexbot_balance", "legendFormat": "Balance"}],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "color": {"mode": "thresholds"},
+          "thresholds": {"steps": [{"color": "red", "value": 0}, {"color": "green", "value": 1}]}
+        }
+      }
+    },
+    {
+      "title": "Equity",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
+      "targets": [{"expr": "forexbot_equity", "legendFormat": "Equity"}],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "color": {"mode": "thresholds"},
+          "thresholds": {"steps": [{"color": "red", "value": 0}, {"color": "green", "value": 1}]}
+        }
+      }
+    },
+    {
+      "title": "Open Trades",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
+      "targets": [{"expr": "forexbot_open_trades", "legendFormat": "Open"}]
+    },
+    {
+      "title": "Daily P&L",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
+      "targets": [{"expr": "forexbot_daily_pnl", "legendFormat": "P&L"}],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "color": {"mode": "thresholds"},
+          "thresholds": {"steps": [{"color": "red", "value": null}, {"color": "green", "value": 0}]}
+        }
+      }
+    },
+    {
+      "title": "Equity Curve",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "targets": [{"expr": "forexbot_equity", "legendFormat": "Equity"}]
+    },
+    {
+      "title": "Drawdown %",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "targets": [{"expr": "forexbot_drawdown_pct", "legendFormat": "Drawdown"}]
+    },
+    {
+      "title": "Trades Opened (24h)",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 12},
+      "targets": [{"expr": "rate(forexbot_trades_opened_total[24h])", "legendFormat": "Trades/h"}]
+    },
+    {
+      "title": "Win Rate %",
+      "type": "gauge",
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 12},
+      "targets": [{"expr": "forexbot_win_rate_pct", "legendFormat": "Win Rate"}],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "color": {"mode": "thresholds"},
+          "thresholds": {"steps": [
+            {"color": "red", "value": 0},
+            {"color": "yellow", "value": 40},
+            {"color": "green", "value": 60}
+          ]}
+        }
+      }
+    },
+    {
+      "title": "API Latency (p99)",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 12},
+      "targets": [{"expr": "forexbot_api_latency_p99", "legendFormat": "p99 ms"}]
+    },
+    {
+      "title": "System Resources",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 18},
+      "targets": [
+        {"expr": "forexbot_cpu_pct", "legendFormat": "CPU %"},
+        {"expr": "forexbot_ram_mb", "legendFormat": "RAM MB"}
+      ]
+    },
+    {
+      "title": "Queue Depth",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 18},
+      "targets": [{"expr": "forexbot_queue_depth", "legendFormat": "Queue"}]
+    },
+    {
+      "title": "MT5 Latency (p99)",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 18},
+      "targets": [{"expr": "forexbot_mt5_latency_p99", "legendFormat": "p99 ms"}]
+    }
+  ]
+}

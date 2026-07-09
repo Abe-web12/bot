@@ -1,0 +1,39 @@
+# =============================================================================
+# ForexBot Frontend — Multi-stage Docker Build
+# =============================================================================
+# Stage 1: Build — Node.js 20 Alpine
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+# Copy package files and install dependencies
+COPY dashboard/package.json dashboard/package-lock.json ./
+RUN npm ci
+
+# Copy source code
+COPY dashboard/ .
+
+# Build the Next.js standalone output
+RUN npm run build
+
+# Stage 2: Runtime — Node.js 20 Alpine (minimal)
+FROM node:20-alpine AS runtime
+
+WORKDIR /app
+
+# Copy standalone build output
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/public ./public
+
+ENV NODE_ENV=production \
+    HOSTNAME=0.0.0.0 \
+    PORT=3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+
+EXPOSE 3000
+
+ENTRYPOINT ["node", "server.js"]

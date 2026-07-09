@@ -1,0 +1,45 @@
+# =============================================================================
+# ForexBot — Systemd Service (Docker Compose managed)
+# =============================================================================
+# Install:
+#   sudo cp deploy/systemd/forexbot.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable forexbot
+#   sudo systemctl start forexbot
+# =============================================================================
+
+[Unit]
+Description=ForexBot Trading Platform
+Documentation=https://github.com/your-org/forex-bot
+Requires=docker.service
+After=docker.service network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+Group=docker
+
+WorkingDirectory=/opt/forexbot
+Environment=COMPOSE_BAKE=true
+
+# Validate environment before starting
+ExecStartPre=/usr/bin/python3 deploy/env/validate_env.py /opt/forexbot/.env
+
+# Start services
+ExecStart=/usr/local/bin/docker compose -f deploy/docker/docker-compose.yml -f deploy/docker/docker-compose.prod.yml up -d --remove-orphans --wait
+
+# Stop services gracefully
+ExecStop=/usr/local/bin/docker compose -f deploy/docker/docker-compose.yml -f deploy/docker/docker-compose.prod.yml down --timeout 60
+
+# Restart on failure
+Restart=on-failure
+RestartSec=30
+
+# Auto-recovery: if main service fails, try to restart
+ExecStopPost=/usr/local/bin/docker compose -f deploy/docker/docker-compose.yml -f deploy/docker/docker-compose.prod.yml ps --status dead --filter "status=dead" | xargs -r docker compose restart
+
+[Install]
+WantedBy=multi-user.target

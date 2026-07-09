@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs / data
+logs/
+database/*.db
+database/*.db-journal
+database/*.db-wal
+database/*.db-shm
+
+# Test
+.pytest_cache/
+test-results.xml
+coverage/
+htmlcov/
+.coverage

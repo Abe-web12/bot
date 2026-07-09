@@ -1,0 +1,50 @@
+# =============================================================================
+# ForexBot Backend — Multi-stage Docker Build (Linux)
+# =============================================================================
+# NOTE: MetaTrader5 is Windows-only and NOT installed in this image.
+# Set MT5_MODE=bridge and MT5_BRIDGE_URL to connect to a Windows host
+# running the MT5 Bridge Service (mt5_bridge_service/).
+#
+# Stage 1: Base — Python 3.12 slim with build deps
+FROM python:3.12-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Stage 2: Dependencies — cache layer
+FROM base AS deps
+
+COPY forex_bot/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Stage 3: Runtime — final image
+FROM base AS runtime
+
+COPY --from=deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=deps /usr/local/bin /usr/local/bin
+
+# Create required directories
+RUN mkdir -p /app/database /app/logs
+
+# Copy application code
+COPY forex_bot/ .
+
+# Health check: pings the Flask health endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health', timeout=5)" || exit 1
+
+EXPOSE 5000
+
+# Run with exec form so signals propagate correctly to Python
+# Default to bridge mode (MetaTrader5 not available in Linux Docker)
+ENV MT5_MODE=bridge
+ENTRYPOINT ["python", "run.py"]

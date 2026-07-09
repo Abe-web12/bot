@@ -1,0 +1,4 @@
+# MT5 Bridge Service — Windows-only dependencies
+# Install on the Windows machine that has MetaTrader 5 installed.
+MetaTrader5==5.0.5735
+flask==3.1.1

@@ -1,0 +1,72 @@
+# =============================================================================
+# ForexBot — Docker Compose
+# =============================================================================
+# Usage:
+#   Development: docker compose -f deploy/docker/docker-compose.yml up
+#   Production:  docker compose -f deploy/docker/docker-compose.yml -f deploy/docker/docker-compose.prod.yml up -d
+# =============================================================================
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Backend — Flask API + Trading Engine
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.backend
+    container_name: forexbot-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - backend-db:/app/database
+      - backend-logs:/app/logs
+      - backend-data:/app/data
+    env_file:
+      - ../../forex_bot/.env
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=5000
+    logging: *default-logging
+    networks:
+      - forexbot-network
+
+  # ---------------------------------------------------------------------------
+  # Frontend — Next.js Dashboard
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.frontend
+    container_name: forexbot-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:5000}
+    depends_on:
+      - backend
+    logging: *default-logging
+    networks:
+      - forexbot-network
+
+networks:
+  forexbot-network:
+    driver: bridge
+    name: forexbot-network
+
+volumes:
+  backend-db:
+    name: forexbot-db
+  backend-logs:
+    name: forexbot-logs
+  backend-data:
+    name: forexbot-data

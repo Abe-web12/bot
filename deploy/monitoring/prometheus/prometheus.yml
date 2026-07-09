@@ -1,0 +1,84 @@
+# =============================================================================
+# ForexBot — Prometheus Configuration
+# =============================================================================
+# Scrapes the bot's metrics endpoint and system-level metrics.
+# Grafana dashboards in deploy/monitoring/grafana/dashboards/ visualize these.
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+# Alertmanager configuration (if deployed)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # Add: ["alertmanager:9093"] when Alertmanager is deployed
+
+# Rule files for alerting
+rule_files:
+  - "alerts.yml"
+
+scrape_configs:
+
+  # ---------------------------------------------------------------------------
+  # ForexBot Backend Metrics
+  # ---------------------------------------------------------------------------
+  - job_name: 'forexbot-backend'
+    scrape_interval: 15s
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'backend:5000'
+        labels:
+          service: 'forexbot'
+          component: 'backend'
+
+  # ---------------------------------------------------------------------------
+  # ForexBot Health Endpoint
+  # ---------------------------------------------------------------------------
+  - job_name: 'forexbot-health'
+    scrape_interval: 30s
+    metrics_path: /health
+    static_configs:
+      - targets:
+          - 'backend:5000'
+        labels:
+          service: 'forexbot'
+          component: 'health'
+
+  # ---------------------------------------------------------------------------
+  # Node Exporter (system-level metrics from the host)
+  # ---------------------------------------------------------------------------
+  - job_name: 'node'
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'node-exporter:9100'
+        labels:
+          service: 'system'
+
+  # ---------------------------------------------------------------------------
+  # Docker Engine Metrics
+  # ---------------------------------------------------------------------------
+  - job_name: 'docker'
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'cadvisor:8080'
+        labels:
+          service: 'docker'
+
+  # ---------------------------------------------------------------------------
+  # Nginx Metrics
+  # ---------------------------------------------------------------------------
+  - job_name: 'nginx'
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'nginx:80'
+        labels:
+          service: 'forexbot'
+          component: 'nginx'

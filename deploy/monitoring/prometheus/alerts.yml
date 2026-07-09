@@ -1,0 +1,106 @@
+# =============================================================================
+# ForexBot — Prometheus Alert Rules
+# =============================================================================
+groups:
+  - name: forexbot-alerts
+    interval: 30s
+    rules:
+
+      # -----------------------------------------------------------------------
+      # Backend Availability
+      # -----------------------------------------------------------------------
+      - alert: BackendDown
+        expr: up{job="forexbot-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ForexBot backend is down"
+          description: "Backend has been unreachable for over 1 minute."
+
+      - alert: BackendHealthCheckFailing
+        expr: probe_success{job="forexbot-health"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend health check failing"
+          description: "Health endpoint has been failing for over 2 minutes."
+
+      # -----------------------------------------------------------------------
+      # MT5 Connection
+      # -----------------------------------------------------------------------
+      - alert: MT5Disconnected
+        expr: forexbot_connection_status == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MT5 disconnected"
+          description: "MT5 connection has been lost for over 2 minutes."
+
+      # -----------------------------------------------------------------------
+      # Resource Usage
+      # -----------------------------------------------------------------------
+      - alert: HighCPUUsage
+        expr: 100 - (rate(node_cpu_seconds_total{mode="idle"}[5m]) * 100) > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is above 90% for over 5 minutes."
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 90% for over 5 minutes."
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Less than 10% disk space remaining."
+
+      # -----------------------------------------------------------------------
+      # Database
+      # -----------------------------------------------------------------------
+      - alert: DatabaseIntegrityFailure
+        expr: forexbot_database_integrity == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database integrity check failed"
+          description: "Database integrity check returned errors."
+
+      # -----------------------------------------------------------------------
+      # Queue Depth
+      # -----------------------------------------------------------------------
+      - alert: QueueBacklog
+        expr: forexbot_queue_depth > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Persistent queue backlog"
+          description: "Queue depth is above 50 intents for over 5 minutes."
+
+      # -----------------------------------------------------------------------
+      # Trade Errors
+      # -----------------------------------------------------------------------
+      - alert: HighTradeRejectionRate
+        expr: rate(forexbot_trades_rejected_total[15m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High trade rejection rate"
+          description: "More than 5 trades rejected per minute over the last 15 minutes."
