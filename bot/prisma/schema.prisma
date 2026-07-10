@@ -1,0 +1,384 @@
+// Shared persistence layer for the real-time forex trading system.
+// The Python bot (forex_bot) WRITES operational data here; Next.js Route
+// Handlers READ from here via Prisma to serve the dashboard.
+// PostgreSQL on Supabase/Neon. No auth models by design (private single-operator use).
+
+generator client {
+  provider = "prisma-client-py"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────
+
+enum TradeSide {
+  BUY
+  SELL
+}
+
+enum TradeStatus {
+  OPEN
+  CLOSED
+}
+
+enum SignalDirection {
+  BUY
+  SELL
+  NEUTRAL
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+// ─────────────────────────────────────────────────────────────
+// TRADES & POSITIONS
+// ─────────────────────────────────────────────────────────────
+
+model Trade {
+  id           String      @id @default(cuid())
+  ticket       BigInt      @unique                 // MT5 order ticket
+  symbol       String
+  side         TradeSide
+  volume       Float                               // lots
+  openPrice    Float
+  closePrice   Float?
+  stopLoss     Float?
+  takeProfit   Float?
+  commission   Float       @default(0)
+  swap         Float       @default(0)
+  grossProfit  Float       @default(0)
+  netProfit    Float       @default(0)
+  pips         Float?
+  strategy     String?
+  magic        Int?
+  comment      String?
+  status       TradeStatus @default(CLOSED)
+  openedAt     DateTime
+  closedAt     DateTime?
+  createdAt    DateTime    @default(now())
+  decisions   DecisionLog[]
+  @@index([symbol, closedAt])
+  @@index([status, closedAt])
+  @@index([closedAt])
+  @@map("trades")
+}
+
+model Position {
+  id                String    @id @default(cuid())
+  ticket            BigInt    @unique
+  symbol            String
+  side              TradeSide
+  volume            Float
+  openPrice         Float
+  currentPrice      Float
+  stopLoss          Float?
+  takeProfit        Float?
+  swap              Float     @default(0)
+  commission        Float     @default(0)
+  unrealizedProfit  Float     @default(0)
+  openedAt          DateTime
+  updatedAt         DateTime  @updatedAt
+
+  @@index([symbol])
+  @@map("positions")
+}
+
+// ─────────────────────────────────────────────────────────────
+// SIGNALS & STRATEGY
+// ─────────────────────────────────────────────────────────────
+
+model Signal {
+  id          String          @id @default(cuid())
+  symbol      String
+  timeframe   String
+  direction   SignalDirection @default(NEUTRAL)
+  score       Float                               // composite strategy score
+  acted       Boolean         @default(false)     // did the bot open a trade on it
+  indicators  Json?                               // raw indicator values snapshot
+  evaluation  Json?                               // rule-by-rule evaluation breakdown
+  generatedAt DateTime        @default(now())
+  decisions   DecisionLog[]
+  @@index([symbol, generatedAt])
+  @@index([generatedAt])
+  @@map("signals")
+}
+
+// ─────────────────────────────────────────────────────────────
+// ACCOUNT & RISK SNAPSHOTS (time series)
+// ─────────────────────────────────────────────────────────────
+
+model AccountSnapshot {
+  id           String   @id @default(cuid())
+  balance      Float
+  equity       Float
+  margin       Float    @default(0)
+  freeMargin   Float    @default(0)
+  marginLevel  Float?
+  currency     String   @default("USD")
+  leverage     Int?
+  capturedAt   DateTime @default(now())
+
+  @@index([capturedAt])
+  @@map("account_snapshots")
+}
+
+model RiskSnapshot {
+  id                String   @id @default(cuid())
+  dailyPnl          Float    @default(0)
+  dailyDrawdownPct  Float    @default(0)
+  maxDrawdownPct    Float    @default(0)
+  openRiskPct       Float    @default(0)
+  exposurePct       Float    @default(0)
+  riskPerTradePct   Float    @default(0)
+  openPositions     Int      @default(0)
+  marginLevel       Float?
+  capturedAt        DateTime @default(now())
+
+  @@index([capturedAt])
+  @@map("risk_snapshots")
+}
+
+// ─────────────────────────────────────────────────────────────
+// MARKET DATA
+// ─────────────────────────────────────────────────────────────
+
+model MarketCandle {
+  id        String   @id @default(cuid())
+  symbol    String
+  timeframe String
+  openTime  DateTime
+  open      Float
+  high      Float
+  low       Float
+  close     Float
+  volume    Float    @default(0)
+  spread    Float?
+
+  @@unique([symbol, timeframe, openTime])
+  @@index([symbol, timeframe, openTime])
+  @@map("market_candles")
+}
+
+// ─────────────────────────────────────────────────────────────
+// LOGS, JOURNAL, NOTIFICATIONS
+// ─────────────────────────────────────────────────────────────
+
+model LogEntry {
+  id         String   @id @default(cuid())
+  level      LogLevel @default(INFO)
+  logger     String?
+  message    String
+  context    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([level, createdAt])
+  @@index([createdAt])
+  @@map("log_entries")
+}
+
+model JournalEntry {
+  id         String   @id @default(cuid())
+  entryType  String                               // e.g. "trade", "note", "system"
+  symbol     String?
+  title      String
+  content    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([entryType, createdAt])
+  @@index([symbol, createdAt])
+  @@map("journal_entries")
+}
+
+model Notification {
+  id         String             @id @default(cuid())
+  channel    String                             // e.g. "telegram", "email"
+  level      LogLevel           @default(INFO)
+  title      String
+  body       String
+  status     NotificationStatus @default(QUEUED)
+  sentAt     DateTime?
+  createdAt  DateTime           @default(now())
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ─────────────────────────────────────────────────────────────
+// AUTONOMOUS BOT: STATE, SESSIONS, DECISIONS, PENDING ORDERS
+// ─────────────────────────────────────────────────────────────
+
+enum BotMode {
+  DISABLED
+  OBSERVE
+  SEMI_AUTO
+  FULL_AUTO
+}
+
+enum DecisionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  ERROR
+  EXECUTED
+}
+
+enum DecisionAction {
+  OPEN_BUY
+  OPEN_SELL
+  CLOSE
+  HOLD
+  SKIP
+}
+
+enum PendingOrderType {
+  BUY_LIMIT
+  SELL_LIMIT
+  BUY_STOP
+  SELL_STOP
+}
+
+enum PendingOrderStatus {
+  PENDING
+  TRIGGERED
+  CANCELLED
+  EXPIRED
+  REJECTED
+}
+
+model BotState {
+  id              String   @id @default("singleton")
+  mode            BotMode  @default(DISABLED)
+  killSwitch      Boolean  @default(false)
+  activeStrategy  String?
+  maxOpenTrades   Int      @default(5)
+  maxDailyLossPct Float    @default(5)
+  note            String?
+  updatedBy       String?
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+
+  @@map("bot_state")
+}
+
+model SessionWindow {
+  id              String   @id @default(cuid())
+  sessionName     String   @unique
+  startMinuteUtc  Int
+  endMinuteUtc    Int
+  enabled         Boolean  @default(true)
+  tradingEnabled  Boolean  @default(true)
+  symbols         String[] @default([])
+  note            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  decisions       DecisionLog[]
+
+  @@index([enabled])
+  @@map("session_windows")
+}
+
+model DecisionLog {
+  id              String         @id @default(cuid())
+  symbol          String
+  timeframe       String?
+  action          DecisionAction @default(SKIP)
+  status          DecisionStatus @default(PENDING)
+
+  model           String?
+  inputPrompt     String
+  outputDecision  String
+  rationale       String?
+  confidenceScore Float?
+  proposedSl      Float?
+  proposedTp      Float?
+  proposedVolume  Float?
+  latencyMs       Int?
+  error           String?
+
+  signalId        String?
+  signal          Signal?        @relation(fields: [signalId], references: [id], onDelete: SetNull)
+
+  sessionWindowId String?
+  sessionWindow   SessionWindow? @relation(fields: [sessionWindowId], references: [id], onDelete: SetNull)
+
+  pendingOrderId  String?        @unique
+  pendingOrder    PendingOrder?  @relation(fields: [pendingOrderId], references: [id], onDelete: SetNull)
+
+  tradeId         String?
+  trade           Trade?         @relation(fields: [tradeId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime       @default(now())
+
+  @@index([symbol, createdAt])
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@map("decision_logs")
+}
+
+model PendingOrder {
+  id           String             @id @default(cuid())
+  ticket       BigInt             @unique
+  symbol       String
+  type         PendingOrderType
+  status       PendingOrderStatus @default(PENDING)
+  volume       Float
+  price        Float
+  stopLoss     Float?
+  takeProfit   Float?
+  magic        Int?
+  strategy     String?
+  comment      String?
+  placedAt     DateTime           @default(now())
+  expiresAt    DateTime?
+  triggeredAt  DateTime?
+  updatedAt    DateTime           @updatedAt
+
+  decision     DecisionLog?
+
+  @@index([symbol, status])
+  @@index([status, placedAt])
+  @@map("pending_orders")
+}
+
+// ─────────────────────────────────────────────────────────────
+// BOT MONITORING
+// ─────────────────────────────────────────────────────────────
+
+model BotHeartbeat {
+  id          String   @id @default("singleton")
+  lastBeatAt  DateTime @updatedAt
+  loopCount   BigInt   @default(0)
+  mode        String?
+  killSwitch  Boolean  @default(false)
+  note        String?
+
+  @@map("bot_heartbeat")
+}
+
+model DailyRiskCounter {
+  id            String   @id @default(cuid())
+  date          DateTime @default(now()) @db.Date
+  realizedPnl   Float    @default(0)
+  tradesOpened  Int      @default(0)
+
+  @@unique([date])
+  @@map("daily_risk_counter")
+}
