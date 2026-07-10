@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import logging
 
-from bot.mt5_client import SYMBOL_TRADE_MODE_CLOSEONLY, SYMBOL_TRADE_MODE_DISABLED, get_client
+import MetaTrader5 as mt5
+
 from bot.mt5_connector import SymbolInfo, connector
 
 logger = logging.getLogger("symbols")
@@ -82,14 +83,14 @@ def is_symbol_tradeable(symbol: str) -> tuple[bool, str]:
     "market session is open", which is a time-based check handled
     separately by market_hours (a later increment).
     """
-    info = get_client().symbol_info(symbol)
-    if not info.visible and info.point == 0.0:
+    info = mt5.symbol_info(symbol)
+    if info is None:
         return False, f"Symbol '{symbol}' not found on this broker."
 
-    if info.trade_mode == SYMBOL_TRADE_MODE_DISABLED:
+    if info.trade_mode == mt5.SYMBOL_TRADE_MODE_DISABLED:
         return False, f"Symbol '{symbol}' trading is disabled by the broker."
 
-    if info.trade_mode == SYMBOL_TRADE_MODE_CLOSEONLY:
+    if info.trade_mode == mt5.SYMBOL_TRADE_MODE_CLOSEONLY:
         return False, f"Symbol '{symbol}' is close-only — new positions cannot be opened."
 
     return True, "OK"

@@ -19,9 +19,9 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
+import MetaTrader5 as mt5
 import pandas as pd
 
-from bot.mt5_client import get_client
 from bot.mt5_connector import MT5ConnectionError, connector
 from market.timeframes import to_mt5
 
@@ -62,7 +62,11 @@ def get_ohlc(symbol: str, timeframe: str, count: int) -> pd.DataFrame:
     # this excludes the still-forming current bar, which is what we want
     # for indicator calculations (an incomplete bar would make every
     # indicator value unstable until the bar closes).
-    rates = get_client().copy_rates_from_pos(symbol, mt5_timeframe, 1, count)
+    rates = mt5.copy_rates_from_pos(symbol, mt5_timeframe, 1, count)
+
+    if rates is None:
+        error = mt5.last_error()
+        raise DataFeedError(f"copy_rates_from_pos({symbol}, {timeframe}) returned None. MT5 error: {error}")
 
     if len(rates) == 0:
         raise DataFeedError(f"copy_rates_from_pos({symbol}, {timeframe}) returned 0 bars.")
@@ -94,16 +98,19 @@ def get_latest_tick(symbol: str) -> dict:
     if not connector.is_connected():
         raise DataFeedError(f"Cannot fetch tick for {symbol}: MT5 is not connected.")
 
-    tick = get_client().symbol_info_tick(symbol)
-    if tick.time is None or (tick.bid <= 0 and tick.ask <= 0):
+    tick = mt5.symbol_info_tick(symbol)
+    if tick is None:
+        error = mt5.last_error()
+        raise DataFeedError(f"symbol_info_tick({symbol}) returned None. MT5 error: {error}")
+
+    if tick.bid <= 0 or tick.ask <= 0:
         raise DataFeedError(
-            f"symbol_info_tick({symbol}) returned empty or non-positive price "
-            f"(bid={tick.bid}, ask={tick.ask}). "
+            f"Tick for {symbol} has non-positive price (bid={tick.bid}, ask={tick.ask}). "
             f"Symbol may be closed for trading or broker feed is broken."
         )
 
     return {
-        "time": tick.time or datetime.now(timezone.utc),
+        "time": datetime.fromtimestamp(tick.time, tz=timezone.utc),
         "bid": tick.bid,
         "ask": tick.ask,
         "last": tick.last,

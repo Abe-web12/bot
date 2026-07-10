@@ -39,7 +39,6 @@ from execution.execution_engine import TradeIntent as EngineTradeIntent
 from execution.order_validator import OrderSide
 from execution.persistent_queue import DuplicateIntentError, PersistentQueueManager
 from market.data_feed import DataFeedError, get_latest_tick
-from market.news_filter import news_filter
 from risk.drawdown_guard import drawdown_guard
 from risk.sl_tp_calculator import SlTpCalculationError, calculate_sl_tp
 from strategy.indicators import IndicatorError, atr
@@ -59,7 +58,6 @@ class SignalOrchestrator:
         self._queue = persistent_queue
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
-        self._last_trade_time: float = 0.0
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -94,21 +92,6 @@ class SignalOrchestrator:
         allowed, reason = drawdown_guard.can_open_new_trade()
         if not allowed:
             logger.debug("Skipping %s: risk gate closed (%s).", symbol, reason)
-            return
-
-        # Global trade cooldown — prevents rapid consecutive trades
-        elapsed = time.monotonic() - self._last_trade_time
-        if elapsed < config.MIN_TRADE_INTERVAL_SECONDS:
-            logger.debug(
-                "Skipping %s: trade cooldown active (%.0fs remaining).",
-                symbol, config.MIN_TRADE_INTERVAL_SECONDS - elapsed,
-            )
-            return
-
-        # News filter gate — fails open on any error so a broken feed
-        # never silently blocks trading.
-        if news_filter.is_news_blackout(symbol):
-            logger.info("Skipping %s: news blackout active.", symbol)
             return
 
         try:
@@ -244,7 +227,6 @@ class SignalOrchestrator:
 
         try:
             execution_id = self._queue.submit(intent)
-            self._last_trade_time = time.monotonic()
             logger.info(
                 "%s %s signal queued: execution_id=%s confidence=%.1f SL=%.5f TP=%.5f RR=%.2f",
                 symbol, signal.direction.value, execution_id, final_confidence,

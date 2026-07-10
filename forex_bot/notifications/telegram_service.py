@@ -74,7 +74,6 @@ class TelegramService:
     def __init__(self) -> None:
         self._token = config.TELEGRAM_TOKEN
         self._chat_id = config.TELEGRAM_CHAT_ID
-        self._parse_mode = getattr(config, "TELEGRAM_PARSE_MODE", "MarkdownV2")
         self._enabled = bool(self._token and self._chat_id)
 
         if not self._enabled:
@@ -334,7 +333,7 @@ class TelegramService:
     # Send a message directly (bypassing the queue) — for testing or
     # urgent out-of-band messages from external callers like the API layer.
     # ------------------------------------------------------------------
-    def send_message(self, text: str, parse_mode: str | None = None) -> bool:
+    def send_message(self, text: str, parse_mode: str = "MarkdownV2") -> bool:
         """
         Enqueues a message for sending. Returns True if queued, False if
         disabled or queue full. The message is sent asynchronously; this
@@ -342,9 +341,9 @@ class TelegramService:
         """
         if not self._enabled:
             return False
-        return self._enqueue(text, parse_mode=parse_mode or self._parse_mode)
+        return self._enqueue(text, parse_mode=parse_mode)
 
-    def send_message_sync(self, text: str, parse_mode: str | None = None) -> bool:
+    def send_message_sync(self, text: str, parse_mode: str = "MarkdownV2") -> bool:
         """
         Sends a message synchronously (blocking). Used by the API layer
         for /test-notification endpoints where immediate confirmation is
@@ -353,15 +352,15 @@ class TelegramService:
         if not self._enabled:
             logger.warning("send_message_sync called but Telegram is not configured.")
             return False
-        return self._send_now(_OutboundMessage(text=text, parse_mode=parse_mode or self._parse_mode))
+        return self._send_now(_OutboundMessage(text=text, parse_mode=parse_mode))
 
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
-    def _enqueue(self, text: str, parse_mode: str | None = None) -> bool:
+    def _enqueue(self, text: str, parse_mode: str = "MarkdownV2") -> bool:
         if not self._enabled:
             return False
-        msg = _OutboundMessage(text=text, parse_mode=parse_mode or self._parse_mode)
+        msg = _OutboundMessage(text=text, parse_mode=parse_mode)
         try:
             self._queue.put_nowait(msg)
             return True

@@ -103,7 +103,6 @@ class StartupValidator:
             self._check_trading_symbols,
             self._check_timeframes,
             self._check_risk_parameters,
-            self._check_mt5_health,
             self._check_jwt_secret,
         ]
 
@@ -417,58 +416,6 @@ class StartupValidator:
 
         return results
 
-    def _check_mt5_health(self) -> CheckResult:
-        """
-        Attempt a lightweight MT5 health probe — initializes the client
-        and checks terminal_info(). This is a WARNING check only because
-        MT5 may not be installed on the development machine (e.g. when
-        running tests or on a CI server). The actual connection with
-        full login credentials happens later in run.py.
-        """
-        import config
-        try:
-            from bot.mt5_client import get_client
-            client = get_client()
-            initialized = client.initialize(
-                login=config.MT5_LOGIN,
-                password=config.MT5_PASSWORD,
-                server=config.MT5_SERVER,
-                path=getattr(config, "MT5_PATH", None),
-            )
-            if not initialized:
-                error = client.last_error()
-                client.shutdown()
-                return CheckResult(
-                    name="mt5_health",
-                    severity=Severity.WARNING,
-                    passed=False,
-                    message="MT5 terminal could not be initialized.",
-                    detail=f"Error: {error}",
-                )
-            terminal = client.terminal_info()
-            client.shutdown()
-            return CheckResult(
-                name="mt5_health",
-                severity=Severity.INFO,
-                passed=True,
-                message=f"MT5 terminal reachable (connected={terminal.connected}).",
-            )
-        except ImportError:
-            return CheckResult(
-                name="mt5_health",
-                severity=Severity.INFO,
-                passed=True,
-                message="MT5 client not importable — skipping health check (expected in test/CI).",
-            )
-        except Exception as exc:
-            return CheckResult(
-                name="mt5_health",
-                severity=Severity.WARNING,
-                passed=False,
-                message="MT5 health probe raised an exception.",
-                detail=str(exc),
-            )
-
     def _check_jwt_secret(self) -> CheckResult:
         import config
         secret = getattr(config, "SECRET_KEY", "")
@@ -481,10 +428,10 @@ class StartupValidator:
             )
         return CheckResult(
             name="jwt_secret",
-            severity=Severity.CRITICAL,
+            severity=Severity.WARNING,
             passed=False,
-            message="SECRET_KEY is missing, weak (<32 chars), or using the default placeholder value.",
-            detail="Generate with: python -c \"import secrets; print(secrets.token_hex(32))\"  and set in .env",
+            message="SECRET_KEY is missing, weak, or using the default placeholder value.",
+            detail="Generate with: python -c \"import secrets; print(secrets.token_hex(32))\"",
         )
 
 

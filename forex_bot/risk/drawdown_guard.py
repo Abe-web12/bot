@@ -10,10 +10,10 @@ result. This module owns two protections:
    trades until the next trading day.
 
 2. Max drawdown — if current equity has fallen more than
-   config.MAX_DRAWDOWN_PCT below the account's peak equity (persisted
-   across restarts via the equity_snapshots table), the bot triggers
-   the kill switch entirely, not just a pause. This is a
-   capital-preservation stop, not a daily reset.
+   config.MAX_DRAWDOWN_PCT below the account's peak equity (since the
+   bot started, persisted across restarts via the database layer once
+   that exists), the bot triggers the kill switch entirely, not just a
+   pause. This is a capital-preservation stop, not a daily reset.
 """
 
 from __future__ import annotations
@@ -31,39 +31,6 @@ logger = logging.getLogger("drawdown_guard")
 class DrawdownGuard:
     def __init__(self) -> None:
         self._peak_equity: float | None = None
-
-    # ------------------------------------------------------------------
-    # Peak equity persistence
-    # ------------------------------------------------------------------
-    def load_peak_equity(self) -> None:
-        """
-        Load the historical peak equity from the equity_snapshots table.
-        Called once at startup so drawdown protection survives restarts.
-        If no snapshots exist yet, falls back to the current live equity.
-        """
-        try:
-            from database.connection import unit_of_work
-            from sqlalchemy import text
-            with unit_of_work() as session:
-                row = session.execute(
-                    text("SELECT MAX(equity) FROM equity_snapshots")
-                ).fetchone()
-                if row and row[0] is not None:
-                    self._peak_equity = float(row[0])
-                    logger.info(
-                        "Peak equity loaded from DB: %.2f", self._peak_equity
-                    )
-                    return
-        except Exception as exc:
-            logger.warning("Could not load peak equity from DB: %s", exc)
-
-        # Fallback: use current live equity as the starting peak
-        equity = state.account.equity
-        if equity > 0:
-            self._peak_equity = equity
-            logger.info(
-                "Peak equity initialised from live account: %.2f", self._peak_equity
-            )
 
     # ------------------------------------------------------------------
     # Daily reset

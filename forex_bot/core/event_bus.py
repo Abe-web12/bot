@@ -25,7 +25,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, DefaultDict, List
 
-import config
 logger = logging.getLogger("event_bus")
 
 
@@ -57,7 +56,7 @@ class EventBus:
         self._subscribers: DefaultDict[str, List[Subscriber]] = defaultdict(list)
         self._lock = threading.RLock()
         self._history: List[Event] = []
-        self._max_history = getattr(config, "EVENT_BUS_MAX_HISTORY", 500)
+        self._max_history = 500
 
     def subscribe(self, event_name: str, handler: Subscriber) -> None:
         with self._lock:

@@ -3,9 +3,8 @@
 # Pin versions for reproducibility. Update intentionally.
 # ============================================================
 
-# MT5 integration (Windows only — Linux/Docker uses the bridge client instead)
-# Install only on Windows:  pip install MetaTrader5==5.0.5735
-# MetaTrader5==5.0.5735
+# MT5 integration (Windows only — Linux CI uses the stub)
+MetaTrader5==5.0.5735
 
 # Environment / configuration
 python-dotenv==1.0.1
@@ -22,27 +21,14 @@ flask==3.1.1
 flask-cors==5.0.1
 flask-sock==0.7.0
 
-# Production WSGI server (required for concurrent WebSocket + REST)
-# Windows: gunicorn is not natively supported; use waitress instead.
-# Linux/Docker: gunicorn + gevent is the production stack.
-gunicorn==22.0.0
-gevent==24.2.1
-# Windows fallback WSGI server
-waitress==3.0.1
-
 # Excel export
 openpyxl==3.1.5
 
 # Authentication
-pyjwt==2.13.0
-bcrypt==4.2.1
-
-# Email validation
-email-validator==2.2.0
+PyJWT==2.10.1
 
 # Database
 SQLAlchemy==2.0.36
-psycopg2-binary==2.9.10  # PostgreSQL driver (install only if using PG)
 
 # Structured logging
 python-json-logger==2.0.7

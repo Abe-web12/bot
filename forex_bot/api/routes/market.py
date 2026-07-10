@@ -231,20 +231,12 @@ def liquidity(symbol: str):
 @require_role("admin", "viewer")
 @rate_limited()
 def news_status():
-    from market.news_filter import news_filter
-    configured = news_filter.is_configured
     return jsonify({
         "timestamp": _ts(),
-        "configured": configured,
-        "filter_enabled": config.FILTER_NEWS,
-        "high_impact_only": config.HIGH_IMPACT_ONLY,
-        "pause_minutes_before": config.NEWS_PAUSE_MINUTES,
-        "resume_minutes_after": config.NEWS_RESUME_MINUTES,
-        "cached_event_count": news_filter.cached_event_count,
-        "last_fetch_error": news_filter.last_fetch_error or None,
+        "configured": False,
         "message": (
-            "News filter active — fetching from ForexFactory calendar."
-            if configured else
-            "News filter disabled (FILTER_NEWS=False in config)."
+            "No economic news calendar feed is integrated in this backend. "
+            "config.FILTER_NEWS exists as a settings flag but has no data source wired to it. "
+            "This endpoint reports that honestly rather than returning a fabricated 'no news' status."
         ),
     })

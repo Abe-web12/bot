@@ -32,21 +32,8 @@ def create_app() -> Flask:
     app.config["SECRET_KEY"] = config.SECRET_KEY or "dev-secret-change-in-production"
     app.config["JSON_SORT_KEYS"] = False
 
-    # CORS — restrict origins to the configured dashboard URL.
-    # Falls back to localhost:3000 for local development only.
-    # Set SITE_URL in .env to your production frontend domain.
-    allowed_origins = [
-        config.SITE_URL,
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ]
-    # Deduplicate and remove empty strings
-    allowed_origins = list({o for o in allowed_origins if o})
-    CORS(
-        app,
-        resources={r"/*": {"origins": allowed_origins}},
-        supports_credentials=True,
-    )
+    # CORS — in production, restrict origins to the dashboard URL.
+    CORS(app, resources={r"/*": {"origins": "*"}})
 
     # ---------------------------------------------------------------
     # Request logging + timing — every request logged with method,
@@ -127,10 +114,7 @@ def create_app() -> Flask:
     from api.routes.risk import risk_bp
     from api.routes.security import security_bp
     from api.routes.strategy import strategy_bp
-    from api.routes.subscriptions import subscriptions_bp
-    from api.routes.users import users_bp
     from api.routes.webhooks import webhooks_bp
-    from api.routes.workspaces import workspaces_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)
@@ -145,9 +129,6 @@ def create_app() -> Flask:
     app.register_blueprint(security_bp)
     app.register_blueprint(realtime_bp)
     app.register_blueprint(openapi_bp)
-    app.register_blueprint(users_bp)
-    app.register_blueprint(workspaces_bp)
-    app.register_blueprint(subscriptions_bp)
 
     # ---------------------------------------------------------------
     # WebSocket — live push, no polling. Subscribes the event bus ->

@@ -24,10 +24,7 @@ single upstream validation already covers the whole DataFrame.
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
-from functools import wraps
-from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -35,49 +32,6 @@ import pandas as pd
 
 class IndicatorError(Exception):
     """Raised when indicator inputs are insufficient or structurally invalid."""
-
-
-# ---------------------------------------------------------------------------
-# Lightweight result cache for indicator functions
-# ---------------------------------------------------------------------------
-
-_CACHE: dict[str, tuple[float, Any]] = {}
-_CACHE_TTL = 5.0  # seconds — indicators computed on the same data within a
-                   # single evaluation cycle benefit without stale-data risk
-
-
-def _cache_key(func_name: str, *args_hashes: int, **kwargs_hashes) -> str:
-    parts = [func_name]
-    parts.extend(str(h) for h in args_hashes)
-    parts.extend(f"{k}={v}" for k, v in sorted(kwargs_hashes.items()))
-    return ":".join(parts)
-
-
-def _cached(func: Callable) -> Callable:
-    """Decorator: caches the last result of `func` per distinct input set
-    within _CACHE_TTL seconds. When the same data is passed again (e.g.
-    indicators called multiple times on the same close series within a
-    single evaluation cycle), the cached result is returned."""
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        key = _cache_key(
-            func.__name__,
-            *[id(a) for a in args],
-            **{k: id(v) for k, v in kwargs.items()},
-        )
-        now = time.monotonic()
-        cached = _CACHE.get(key)
-        if cached is not None and (now - cached[0]) < _CACHE_TTL:
-            return cached[1]
-        result = func(*args, **kwargs)
-        _CACHE[key] = (now, result)
-        # Evict stale entries periodically
-        if len(_CACHE) > 128:
-            stale = [k for k, (t, _) in _CACHE.items() if (now - t) >= _CACHE_TTL]
-            for k in stale:
-                del _CACHE[k]
-        return result
-    return wrapper
 
 
 def _require_min_length(series: pd.Series, min_length: int, name: str) -> None:

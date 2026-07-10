@@ -42,7 +42,7 @@ logger = logging.getLogger("gemini_client")
 _ENDPOINT_TEMPLATE = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 )
-_REQUEST_TIMEOUT = getattr(config, "GEMINI_TIMEOUT", 15.0)
+_REQUEST_TIMEOUT = 15.0
 
 
 class GeminiError(Exception):

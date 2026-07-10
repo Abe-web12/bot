@@ -63,29 +63,6 @@ _EVENT_CHANNEL_MAP: dict[str, str] = {
     "HEALTH_TICK": "health", "METRICS_TICK": "metrics", "EXECUTION_TICK": "execution",
 }
 
-# Channel authorization: which roles can subscribe to each channel.
-# viewer has no channel subscriptions by default (read-only dashboard only).
-_CHANNEL_ROLES: dict[str, set[str]] = {
-    "account": {"owner", "admin", "trader"},
-    "bot": {"owner", "admin"},
-    "trades": {"owner", "admin", "trader"},
-    "signals": {"owner", "admin", "trader"},
-    "risk": {"owner", "admin", "trader"},
-    "health": {"owner", "admin", "trader", "viewer"},
-    "config": {"owner", "admin"},
-    "metrics": {"owner", "admin", "trader", "viewer"},
-    "market": {"owner", "admin", "trader", "viewer"},
-    "execution": {"owner", "admin"},
-}
-
-
-def _can_subscribe(role: str, channel: str) -> bool:
-    allowed = _CHANNEL_ROLES.get(channel)
-    if allowed is None:
-        return role in {"owner", "admin"}
-    return role in allowed
-
-
 _subscribed_to_bus = False
 
 
@@ -116,17 +93,15 @@ def init_websocket(app) -> None:
 
     @sock.route("/ws")
     def ws_handler(ws):
-        auth_result = _authenticate(ws)
-        if auth_result is None:
+        role = _authenticate(ws)
+        if role is None:
             try:
                 ws.send(json.dumps({"error": "unauthorized"}))
             except Exception:
                 pass
             return
 
-        role = auth_result.get("role", "viewer")
-        user_id = auth_result.get("user_id")
-        conn_id = connection_manager.connect(ws, role, send_fn=ws.send, user_id=user_id)
+        conn_id = connection_manager.connect(ws, role, send_fn=ws.send)
         try:
             ws.send(json.dumps({
                 "action": "connected", "conn_id": conn_id, "role": role,
@@ -155,7 +130,7 @@ def init_websocket(app) -> None:
                 continue
             try:
                 payload = decode_access_token(token)
-                return payload
+                return payload.get("role")
             except AuthError:
                 return None
         return None
@@ -178,14 +153,11 @@ def init_websocket(app) -> None:
 
             if action == "subscribe":
                 channel = data.get("channel", "")
-                if not channel:
+                if channel:
+                    connection_manager.subscribe(conn_id, channel)
+                    _safe_send(ws, {"action": "subscribed", "channel": channel})
+                else:
                     _safe_send(ws, {"error": "subscribe requires a 'channel'."})
-                    continue
-                if not _can_subscribe(role, channel):
-                    _safe_send(ws, {"error": f"Role '{role}' is not authorized for channel '{channel}'."})
-                    continue
-                connection_manager.subscribe(conn_id, channel)
-                _safe_send(ws, {"action": "subscribed", "channel": channel})
 
             elif action == "unsubscribe":
                 channel = data.get("channel", "")

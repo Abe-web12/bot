@@ -82,8 +82,6 @@ def account_info():
     from risk.drawdown_guard import drawdown_guard
 
     account = state.account
-    # floating_profit = equity - balance (unrealised P/L on open positions)
-    floating_profit = round(account.equity - account.balance, 2) if account.equity and account.balance else 0.0
     return jsonify({
         "timestamp": _ts(),
         "balance": account.balance,
@@ -92,7 +90,6 @@ def account_info():
         "free_margin": account.free_margin,
         "margin_level": account.margin_level,
         "currency": account.currency,
-        "floating_profit": floating_profit,
         "updated_at": account.updated_at.isoformat() if account.updated_at else None,
         "drawdown_pct": drawdown_guard.current_drawdown_pct(),
         "daily_loss_pct": drawdown_guard.daily_loss_pct(),

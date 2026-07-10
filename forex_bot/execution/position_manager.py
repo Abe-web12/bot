@@ -30,7 +30,8 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from bot.mt5_client import ORDER_TYPE_BUY, get_client
+import MetaTrader5 as mt5
+
 from bot.mt5_connector import MT5ConnectionError, connector
 from core.state_manager import state
 
@@ -62,8 +63,8 @@ class Position:
     comment: str
 
 
-def _from_client_position(raw) -> Position:
-    side = "BUY" if raw.type == ORDER_TYPE_BUY else "SELL"
+def _map_mt5_position(raw) -> Position:
+    side = "BUY" if raw.type == mt5.ORDER_TYPE_BUY else "SELL"
     return Position(
         ticket=raw.ticket,
         symbol=raw.symbol,
@@ -111,23 +112,36 @@ class PositionManager:
         if not connector.is_connected():
             raise PositionManagerError("Cannot fetch positions: MT5 is not connected.")
 
-        client = get_client()
-        raw_positions = client.positions_get(symbol=symbol)
+        if symbol is not None:
+            raw_positions = mt5.positions_get(symbol=symbol)
+        else:
+            raw_positions = mt5.positions_get()
+
+        if raw_positions is None:
+            error = mt5.last_error()
+            # mt5.positions_get() returning None can mean "genuinely zero
+            # positions" OR "call failed" depending on the error code.
+            # error[0] == 1 ("Success") with None result means zero
+            # positions; anything else is a real failure.
+            if error[0] == 1:
+                return []
+            raise PositionManagerError(f"positions_get() failed. MT5 error: {error}")
+
+        positions = [_map_mt5_position(p) for p in raw_positions]
 
         if magic_number is not None:
-            raw_positions = [p for p in raw_positions if p.magic == magic_number]
+            positions = [p for p in positions if p.magic_number == magic_number]
 
-        return [_from_client_position(p) for p in raw_positions]
+        return positions
 
     def get_position_by_ticket(self, ticket: int) -> Position | None:
         if not connector.is_connected():
             raise PositionManagerError("Cannot fetch position: MT5 is not connected.")
 
-        client = get_client()
-        raw_positions = client.positions_get(ticket=ticket)
+        raw_positions = mt5.positions_get(ticket=ticket)
         if not raw_positions:
             return None
-        return _from_client_position(raw_positions[0])
+        return _map_mt5_position(raw_positions[0])
 
     def sync_position_count(self) -> int:
         """

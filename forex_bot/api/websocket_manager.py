@@ -72,7 +72,6 @@ class Connection:
     conn_id: str
     ws: object
     role: str
-    user_id: str | None
     send_fn: Callable[[str], None]
     metrics: ConnectionMetrics = field(default_factory=ConnectionMetrics)
     consecutive_send_failures: int = 0
@@ -129,9 +128,9 @@ class ConnectionManager:
         self._heartbeat_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
 
-    def connect(self, ws, role: str, send_fn: Callable[[str], None], user_id: str | None = None) -> str:
+    def connect(self, ws, role: str, send_fn: Callable[[str], None]) -> str:
         conn_id = str(uuid.uuid4())
-        conn = Connection(conn_id=conn_id, ws=ws, role=role, user_id=user_id, send_fn=send_fn)
+        conn = Connection(conn_id=conn_id, ws=ws, role=role, send_fn=send_fn)
         with self._lock:
             self._connections[conn_id] = conn
         logger.info("WebSocket connected: conn_id=%s role=%s (total=%d)", conn_id, role, len(self._connections))

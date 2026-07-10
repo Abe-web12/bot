@@ -15,26 +15,17 @@ fails immediately and loudly, at the point of lookup, every time.
 
 from __future__ import annotations
 
-from bot.mt5_client import (
-    TIMEFRAME_D1,
-    TIMEFRAME_H1,
-    TIMEFRAME_H4,
-    TIMEFRAME_M1,
-    TIMEFRAME_M15,
-    TIMEFRAME_M30,
-    TIMEFRAME_M5,
-    TIMEFRAME_W1,
-)
+import MetaTrader5 as mt5
 
 _TIMEFRAME_MAP: dict[str, int] = {
-    "M1": TIMEFRAME_M1,
-    "M5": TIMEFRAME_M5,
-    "M15": TIMEFRAME_M15,
-    "M30": TIMEFRAME_M30,
-    "H1": TIMEFRAME_H1,
-    "H4": TIMEFRAME_H4,
-    "D1": TIMEFRAME_D1,
-    "W1": TIMEFRAME_W1,
+    "M1": mt5.TIMEFRAME_M1,
+    "M5": mt5.TIMEFRAME_M5,
+    "M15": mt5.TIMEFRAME_M15,
+    "M30": mt5.TIMEFRAME_M30,
+    "H1": mt5.TIMEFRAME_H1,
+    "H4": mt5.TIMEFRAME_H4,
+    "D1": mt5.TIMEFRAME_D1,
+    "W1": mt5.TIMEFRAME_W1,
 }
 
 # Approximate seconds per bar — used for staleness checks (data_validator)

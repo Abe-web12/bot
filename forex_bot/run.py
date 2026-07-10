@@ -45,13 +45,11 @@ logger = logging.getLogger("run")
 
 import config
 from bot.heartbeat import heartbeat
-from bot.mt5_client import init_client
 from bot.mt5_connector import LiveAccountBlockedError, MT5ConnectionError, connector
 from core import metrics_subscriber, persistence_subscriber
 from core.equity_snapshot_scheduler import equity_snapshot_scheduler
 from core.event_bus import Events, bus
 from core.metrics import metrics
-from services.email_service import email_service
 from core.startup_validator import startup_validator
 from core.state_manager import BotStatus, state
 from database.connection import init_db
@@ -76,75 +74,18 @@ def _handle_shutdown_signal(signum, frame) -> None:
 
 
 def _start_api_server() -> threading.Thread:
-    """Start the API server in a daemon thread.
-
-    Uses Gunicorn with gevent workers when available (production).
-    Falls back to Flask's built-in server for local development only.
-    Gunicorn is required for concurrent WebSocket + REST in production.
-    """
+    """Start Flask API server in a daemon thread."""
     def _run():
         try:
             from api.app import create_app
             app = create_app()
-
-            # Try Gunicorn first (production)
-            try:
-                import gunicorn.app.base  # noqa: F401
-
-                class _StandaloneApp(gunicorn.app.base.BaseApplication):
-                    def __init__(self, application, options=None):
-                        self.options = options or {}
-                        self.application = application
-                        super().__init__()
-
-                    def load_config(self):
-                        for key, value in self.options.items():
-                            if key in self.cfg.settings and value is not None:
-                                self.cfg.set(key.lower(), value)
-
-                    def load(self):
-                        return self.application
-
-                worker_class = "gevent"
-                try:
-                    import gevent  # noqa: F401
-                except ImportError:
-                    worker_class = "gthread"
-                    logger.warning(
-                        "gevent not installed — using gthread workers. "
-                        "Install gevent for full WebSocket support."
-                    )
-
-                options = {
-                    "bind": f"{config.SERVER_HOST}:{config.SERVER_PORT}",
-                    "workers": 1,          # single worker — trading state is process-local
-                    "worker_class": worker_class,
-                    "worker_connections": 1000,
-                    "timeout": 120,
-                    "keepalive": 5,
-                    "loglevel": "warning",
-                    "accesslog": "-",
-                    "errorlog": "-",
-                    "preload_app": False,  # must be False — app uses background threads
-                }
-                logger.info(
-                    "Starting Gunicorn (%s) on %s:%d",
-                    worker_class, config.SERVER_HOST, config.SERVER_PORT,
-                )
-                _StandaloneApp(app, options).run()
-
-            except ImportError:
-                logger.warning(
-                    "Gunicorn not installed — falling back to Flask dev server. "
-                    "Install gunicorn and gevent for production use."
-                )
-                app.run(
-                    host=config.SERVER_HOST,
-                    port=config.SERVER_PORT,
-                    debug=False,
-                    use_reloader=False,
-                    threaded=True,
-                )
+            app.run(
+                host=config.SERVER_HOST,
+                port=config.SERVER_PORT,
+                debug=False,
+                use_reloader=False,
+                threaded=True,
+            )
         except Exception:
             logger.exception("API server crashed.")
 
@@ -198,22 +139,6 @@ def main() -> int:
     telegram_service.start()
 
     # ----------------------------------------------------------------
-    # Step 3b: Email service (gracefully disabled if SMTP not configured)
-    # ----------------------------------------------------------------
-    email_service.start()
-
-    # ----------------------------------------------------------------
-    # Step 3c: Initialize MT5 client (direct or bridge)
-    # ----------------------------------------------------------------
-    try:
-        init_client(mode=config.MT5_MODE, bridge_url=config.MT5_BRIDGE_URL)
-    except Exception as exc:
-        logger.critical("MT5 client initialization failed: %s", exc)
-        state.set_bot_status(BotStatus.ERROR, reason="mt5_client_init_failed")
-        telegram_service.stop()
-        return 1
-
-    # ----------------------------------------------------------------
     # Step 4: MT5 connection
     # ----------------------------------------------------------------
     try:
@@ -238,7 +163,6 @@ def main() -> int:
     # ----------------------------------------------------------------
     # Step 5: Risk guard init
     # ----------------------------------------------------------------
-    drawdown_guard.load_peak_equity()   # restore persisted peak from DB
     drawdown_guard.ensure_daily_stats_current()
     drawdown_guard.update_peak_equity()
 

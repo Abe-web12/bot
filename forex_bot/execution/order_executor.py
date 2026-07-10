@@ -28,20 +28,9 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+import MetaTrader5 as mt5
+
 import config
-from bot.mt5_client import (
-    ORDER_FILLING_IOC,
-    ORDER_TIME_GTC,
-    ORDER_TYPE_BUY,
-    ORDER_TYPE_SELL,
-    TRADE_ACTION_DEAL,
-    TRADE_ACTION_SLTP,
-    TRADE_RETCODE_DONE,
-    TRADE_RETCODE_PRICE_CHANGED,
-    TRADE_RETCODE_REQUOTE,
-    TRADE_RETCODE_TIMEOUT,
-    get_client,
-)
 from bot.mt5_connector import MT5ConnectionError, connector
 from core.circuit_breaker import CircuitOpenError, mt5_circuit
 from core.event_bus import Events, bus
@@ -73,9 +62,9 @@ class OrderRejectedByBrokerError(OrderExecutionError):
 # moved, requote, server busy) as opposed to a structural rejection
 # (invalid volume, no money, market closed) that retrying cannot fix.
 _RETRYABLE_RETCODES = {
-    TRADE_RETCODE_REQUOTE,
-    TRADE_RETCODE_PRICE_CHANGED,
-    TRADE_RETCODE_TIMEOUT,
+    getattr(mt5, "TRADE_RETCODE_REQUOTE", 10004),
+    getattr(mt5, "TRADE_RETCODE_PRICE_CHANGED", 10020),
+    getattr(mt5, "TRADE_RETCODE_TIMEOUT", 10012),
     10031,  # no connection with trade server
 }
 
@@ -99,11 +88,11 @@ def _generate_request_id(symbol: str, side: OrderSide) -> str:
 
 def _build_mt5_request(request: OrderRequest, symbol_info, tick: dict, deviation_points: int) -> dict:
     is_buy = request.side == OrderSide.BUY
-    order_type = ORDER_TYPE_BUY if is_buy else ORDER_TYPE_SELL
+    order_type = mt5.ORDER_TYPE_BUY if is_buy else mt5.ORDER_TYPE_SELL
     price = tick["ask"] if is_buy else tick["bid"]
 
     return {
-        "action": TRADE_ACTION_DEAL,
+        "action": mt5.TRADE_ACTION_DEAL,
         "symbol": request.symbol,
         "volume": normalize_volume(symbol_info, request.volume),
         "type": order_type,
@@ -113,8 +102,8 @@ def _build_mt5_request(request: OrderRequest, symbol_info, tick: dict, deviation
         "deviation": deviation_points,
         "magic": request.magic_number,
         "comment": request.comment[:31] if request.comment else "bot",
-        "type_time": ORDER_TIME_GTC,
-        "type_filling": ORDER_FILLING_IOC,
+        "type_time": mt5.ORDER_TIME_GTC,
+        "type_filling": mt5.ORDER_FILLING_IOC,
     }
 
 
@@ -159,8 +148,8 @@ def _run_pre_flight_checks(request: OrderRequest) -> tuple:
         raise OrderRejectedByRiskError(f"Cannot execute order for {request.symbol}: {exc}") from exc
 
     account = state.account
-    client_account_info = get_client().account_info()
-    leverage = client_account_info.leverage
+    account_info = mt5.account_info()
+    leverage = account_info.leverage if account_info else 0
 
     validation = validate_order(
         request=request,
@@ -244,7 +233,7 @@ def _send_with_retry(
         mt5_request = _build_mt5_request(request, symbol_info, tick, deviation_points)
 
         try:
-            result = mt5_circuit.execute(get_client().order_send, mt5_request)
+            result = mt5_circuit.execute(mt5.order_send, mt5_request)
         except CircuitOpenError as exc:
             logger.error(
                 "[%s] Attempt %d/%d: MT5 circuit breaker is OPEN — failing fast without contacting broker. %s",
@@ -260,8 +249,9 @@ def _send_with_retry(
                 f"[{request_id}] MT5 circuit breaker is open — refusing to send order for {request.symbol}."
             ) from exc
 
-        if result.retcode == -1:
-            last_description = f"order_send() returned error: {result.comment}"
+        if result is None:
+            error = mt5.last_error()
+            last_description = f"order_send() returned None. MT5 error: {error}"
             logger.error("[%s] Attempt %d/%d: %s", request_id, attempt, max_retries, last_description)
             time.sleep(retry_delay_seconds)
             continue
@@ -269,7 +259,7 @@ def _send_with_retry(
         last_retcode = result.retcode
         last_description = _retcode_description(result.retcode)
 
-        if result.retcode == TRADE_RETCODE_DONE:
+        if result.retcode == getattr(mt5, "TRADE_RETCODE_DONE", 10009):
             logger.info(
                 "[%s] Attempt %d/%d: SUCCESS. Ticket=%d, filled price=%.5f, volume=%.2f",
                 request_id, attempt, max_retries, result.order, result.price, result.volume,
@@ -329,29 +319,27 @@ def modify_position_sl_tp(ticket: int, new_sl: float, new_tp: float) -> bool:
     if not connector.is_connected():
         raise OrderExecutionError(f"Cannot modify position {ticket}: MT5 is not connected.")
 
-    client = get_client()
-    positions = client.positions_get(ticket=ticket)
-    if not positions:
+    position = mt5.positions_get(ticket=ticket)
+    if not position:
         raise OrderExecutionError(f"Cannot modify position {ticket}: position not found (already closed?).")
 
-    pos = positions[0]
+    pos = position[0]
     request = {
-        "action": TRADE_ACTION_SLTP, "symbol": pos.symbol, "position": ticket,
+        "action": mt5.TRADE_ACTION_SLTP, "symbol": pos.symbol, "position": ticket,
         "sl": new_sl, "tp": new_tp,
     }
 
     try:
-        result = mt5_circuit.execute(client.order_send, request)
+        result = mt5_circuit.execute(mt5.order_send, request)
     except CircuitOpenError as exc:
         raise OrderExecutionError(
             f"modify_position_sl_tp({ticket}) refused: MT5 circuit breaker is open. {exc}"
         ) from exc
-    if result.retcode == -1:
-        raise OrderExecutionError(
-            f"modify_position_sl_tp({ticket}) failed: order_send returned error. {result.comment}"
-        )
+    if result is None:
+        error = mt5.last_error()
+        raise OrderExecutionError(f"modify_position_sl_tp({ticket}) failed: order_send returned None. Error: {error}")
 
-    if result.retcode != TRADE_RETCODE_DONE:
+    if result.retcode != getattr(mt5, "TRADE_RETCODE_DONE", 10009):
         raise OrderExecutionError(
             f"modify_position_sl_tp({ticket}) rejected: retcode={result.retcode} ({_retcode_description(result.retcode)})"
         )
@@ -369,19 +357,18 @@ def close_position(ticket: int, volume: float | None = None, deviation_points: i
     if not connector.is_connected():
         raise OrderExecutionError(f"Cannot close position {ticket}: MT5 is not connected.")
 
-    client = get_client()
-    positions = client.positions_get(ticket=ticket)
-    if not positions:
+    position = mt5.positions_get(ticket=ticket)
+    if not position:
         raise OrderExecutionError(f"Cannot close position {ticket}: position not found (already closed?).")
 
-    pos = positions[0]
+    pos = position[0]
     close_volume = volume if volume is not None else pos.volume
 
     if close_volume > pos.volume:
         raise OrderExecutionError(f"Cannot close {close_volume} lots on position {ticket}: only {pos.volume} lots open.")
 
-    is_closing_a_buy = pos.type == ORDER_TYPE_BUY
-    close_order_type = ORDER_TYPE_SELL if is_closing_a_buy else ORDER_TYPE_BUY
+    is_closing_a_buy = pos.type == mt5.ORDER_TYPE_BUY
+    close_order_type = mt5.ORDER_TYPE_SELL if is_closing_a_buy else mt5.ORDER_TYPE_BUY
 
     try:
         tick = get_latest_tick(pos.symbol)
@@ -391,24 +378,23 @@ def close_position(ticket: int, volume: float | None = None, deviation_points: i
     close_price = tick["bid"] if is_closing_a_buy else tick["ask"]
 
     request = {
-        "action": TRADE_ACTION_DEAL, "symbol": pos.symbol, "volume": close_volume,
+        "action": mt5.TRADE_ACTION_DEAL, "symbol": pos.symbol, "volume": close_volume,
         "type": close_order_type, "position": ticket, "price": close_price,
         "deviation": deviation_points, "magic": pos.magic, "comment": "bot_close",
-        "type_time": ORDER_TIME_GTC, "type_filling": ORDER_FILLING_IOC,
+        "type_time": mt5.ORDER_TIME_GTC, "type_filling": mt5.ORDER_FILLING_IOC,
     }
 
     try:
-        result = mt5_circuit.execute(client.order_send, request)
+        result = mt5_circuit.execute(mt5.order_send, request)
     except CircuitOpenError as exc:
         raise OrderExecutionError(
             f"close_position({ticket}) refused: MT5 circuit breaker is open. {exc}"
         ) from exc
-    if result.retcode == -1:
-        raise OrderExecutionError(
-            f"close_position({ticket}) failed: order_send returned error. {result.comment}"
-        )
+    if result is None:
+        error = mt5.last_error()
+        raise OrderExecutionError(f"close_position({ticket}) failed: order_send returned None. Error: {error}")
 
-    if result.retcode != TRADE_RETCODE_DONE:
+    if result.retcode != getattr(mt5, "TRADE_RETCODE_DONE", 10009):
         raise OrderExecutionError(
             f"close_position({ticket}) rejected: retcode={result.retcode} ({_retcode_description(result.retcode)})"
         )
