@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react"
 import { wsClient } from "@/lib/websocket-client"
 import { useWsStore } from "@/stores/ws-store"
+import { useShallow } from "zustand/react/shallow"
 import type { WsChannel, WsEvent } from "@/types/websocket"
 
 export function useWebSocket() {
@@ -35,5 +36,10 @@ export function useWsChannel(channel: WsChannel, handler: (event: WsEvent) => vo
 }
 
 export function useWsStatus() {
-  return useWsStore((s) => ({ connected: s.connected, currentSequence: s.currentSequence }))
+  return useWsStore(
+    useShallow((s) => ({
+      connected: s.connected,
+      currentSequence: s.currentSequence,
+    })),
+  )
 }

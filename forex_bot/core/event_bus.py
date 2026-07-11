@@ -131,11 +131,12 @@ class Events:
     SIGNAL_GENERATED = "SIGNAL_GENERATED"
     SIGNAL_SCORED = "SIGNAL_SCORED"
     SIGNAL_REJECTED = "SIGNAL_REJECTED"       # scored but did not pass risk/threshold gates
+    AUTONOMOUS_DECISION_EVENT = "AUTONOMOUS_DECISION_EVENT" # Added for Autonomous Trading Engine
     TRADE_OPENED = "TRADE_OPENED"
     TRADE_CLOSED = "TRADE_CLOSED"
     TRADE_REJECTED = "TRADE_REJECTED"
-    SL_HIT = "SL_HIT"                        # stop loss hit notification
-    TP_HIT = "TP_HIT"                        # take profit hit notification
+    SL_HIT = "SL_HIT"                         # stop loss hit notification
+    TP_HIT = "TP_HIT"                         # take profit hit notification
     POSITION_BREAKEVEN = "POSITION_BREAKEVEN"
     POSITION_TRAILING_UPDATED = "POSITION_TRAILING_UPDATED"
     POSITION_PARTIAL_CLOSED = "POSITION_PARTIAL_CLOSED"
@@ -143,7 +144,7 @@ class Events:
     # System
     HEARTBEAT = "HEARTBEAT"
     ERROR = "ERROR"
-    CRITICAL_ERROR = "CRITICAL_ERROR"        # severity distinct from ERROR for alerting
+    CRITICAL_ERROR = "CRITICAL_ERROR"         # severity distinct from ERROR for alerting
     CIRCUIT_BREAKER_TRIPPED = "CIRCUIT_BREAKER_TRIPPED"
     CIRCUIT_BREAKER_RECOVERED = "CIRCUIT_BREAKER_RECOVERED"
     CONFIG_RELOADED = "CONFIG_RELOADED"

@@ -35,10 +35,17 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${base}${path}`;
+
+  const authToken =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem("auth_token")
+      : null;
+
   const res = await fetch(url, {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...(options.headers as Record<string, string>),
     },
   });
